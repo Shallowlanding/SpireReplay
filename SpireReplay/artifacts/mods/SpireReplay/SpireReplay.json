@@ -1,0 +1,12 @@
+{
+  "id": "SpireReplay",
+  "name": "SpireReplay",
+  "author": "neon2",
+  "description": "Records and browses single-player runs and battle retries. Includes clickable battle replay and experimental full-run playback from matching seed/character history, with state checks and manual stop.",
+  "version": "v0.10.2",
+  "min_game_version": "0.111.0",
+  "has_pck": true,
+  "has_dll": true,
+  "dependencies": [],
+  "affects_gameplay": true
+}
