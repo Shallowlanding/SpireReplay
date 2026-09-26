@@ -28,7 +28,7 @@ public partial class MainFile : Node
             BattleRecorder.Initialize();
             try { RunLibrary.Trim(ProjectSettings.GlobalizePath("user://SpireReplay/recordings")); }
             catch (Exception e) { Logger.Warn("History cleanup failed: " + e.Message); }
-            Logger.Info("SpireReplay 0.10.2: battle, choice, potion, reward, shop and rest-site recording enabled.");
+            Logger.Info("SpireReplay 0.11.9: battle, choice, potion, reward, shop and rest-site recording enabled.");
         }
         catch (Exception error)
         {

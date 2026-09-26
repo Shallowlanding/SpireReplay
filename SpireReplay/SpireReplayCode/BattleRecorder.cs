@@ -46,12 +46,15 @@ internal static partial class BattleRecorder
             Record(player.Creature.CombatState, "undo_end_turn"));
         manager.CombatWon += room => Safe(() => Finish(room, "won"));
         manager.CombatEnded += room => Safe(() => Finish(room, "lost"));
+        manager.CombatWon += _ => Safe(() => MultiplayerReplay.Finish(true));
+        manager.CombatEnded += _ => Safe(() => MultiplayerReplay.Finish(false));
         _initialized = true;
     }
 
     private static void Start(CombatState state)
     {
         CloseInterrupted();
+        MultiplayerReplay.Setup(state);
         if (state.RunState.Players.Count != 1 ||
             RunManager.Instance.NetService.Type != NetGameType.Singleplayer) return;
 

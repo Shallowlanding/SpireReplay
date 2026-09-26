@@ -44,7 +44,8 @@ internal static partial class BattleRecorder
         var coord = run.CurrentMapCoord;
         WholeRun!.Enter(new RunRoomRecord
         {
-            Act = run.CurrentActIndex + 1, Floor = run.TotalFloor, RoomId = room.Id ?? run.NextRoomId,
+            Act = run.CurrentActIndex + 1, Floor = RecordingLocation.ArchiveFloor(run.TotalFloor, room.ModelId?.ToString()), RoomId = room.Id ?? run.NextRoomId,
+            GameFloor = RecordingLocation.IsArchitect(room.ModelId?.ToString()) ? run.TotalFloor : null,
             Type = room.RoomType.ToString(), ModelId = room.ModelId?.ToString() ?? "",
             MapRow = coord?.row, MapCol = coord?.col
         }, restoring || room.IsPreFinished, run.CurrentRoomCount == 0);

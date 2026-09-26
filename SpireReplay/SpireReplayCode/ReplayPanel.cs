@@ -291,12 +291,21 @@ public partial class ReplayPanel : CanvasLayer
 
     public override void _Process(double delta)
     {
+        var manager = MegaCrit.Sts2.Core.Runs.RunManager.Instance;
+        if (!manager.IsInProgress || manager.IsCleaningUp ||
+            manager.NetService.Type != MegaCrit.Sts2.Core.Multiplayer.Game.NetGameType.Singleplayer)
+        {
+            _panel.Visible = false;
+            if (RunReplayDriver.Active) RunReplayDriver.Stop("已离开单人对局");
+            if (ReplayDriver.Active) ReplayDriver.Stop("已离开单人对局");
+            return;
+        }
         _placement.Tick(_panel);
         ReplayDriver.Tick(); RunReplayDriver.Tick(); _refresh += delta;
         if (_refresh < 0.15) return; _refresh = 0;
         var current = BattleRecorder.CurrentRecording;
         var archive = BattleRecorder.WholeRun;
-        _panel.Visible = !ReplayLibraryPanel.IsOpen && MegaCrit.Sts2.Core.Runs.RunManager.Instance.IsInProgress &&
+        _panel.Visible = MultiplayerReplay.Current == null && !ReplayLibraryPanel.IsOpen && MegaCrit.Sts2.Core.Runs.RunManager.Instance.IsInProgress &&
             !MegaCrit.Sts2.Core.Runs.RunManager.Instance.IsCleaningUp && (current != null || archive != null);
         if (!_panel.Visible) return;
         if (archive != null) RefreshRunVersions(archive);

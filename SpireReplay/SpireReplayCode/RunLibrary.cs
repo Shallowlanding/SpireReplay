@@ -23,6 +23,7 @@ public static class RunLibrary
             {
                 var run = JsonSerializer.Deserialize<RunRecording>(File.ReadAllText(path), ReplayJson.Options);
                 if (run == null || run.Rooms == null || run.Rooms.Any(r => r == null) || string.IsNullOrWhiteSpace(run.RunId) || Path.GetFileName(dir) != ReplayJson.Hash(run.RunId)) continue;
+                RecordingLocation.NormalizeArchitect(run);
                 entries.Add(new StoredRun(run, run.StoredAtUtc ?? new DateTimeOffset(File.GetCreationTimeUtc(path)), path));
             }
             catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException) { /* A damaged file must not block other records. */ }
@@ -50,6 +51,7 @@ public static class RunLibrary
         int remove = Math.Max(0, entries.Count - Capacity), removed = 0;
         foreach (var entry in entries.Where(e => e.Recording.RunId != activeRunId).Take(remove))
             if (Delete(root, entry.Recording.RunId, activeRunId)) removed++;
+        CleanupLegacy(root);
         return removed;
     }
     public static int Clear(string root, string? activeRunId = null)
@@ -57,6 +59,7 @@ public static class RunLibrary
         int count = 0;
         foreach (var entry in List(root).Where(e => e.Recording.RunId != activeRunId))
             if (Delete(root, entry.Recording.RunId, activeRunId)) count++;
+        CleanupLegacy(root);
         return count;
     }
     public static bool Delete(string root, string runId, string? activeRunId = null)
@@ -68,8 +71,26 @@ public static class RunLibrary
         bool existed = Directory.Exists(dir);
         if (Directory.Exists(dir)) Directory.Delete(dir, true);
         if (Directory.Exists(battles)) Directory.Delete(battles, true);
+        CleanupLegacy(root);
         if (existed) Revision++;
         return existed;
+    }
+    // Legacy diagnostic journals are redundant with run archives. Production no longer writes them.
+    public static void CleanupLegacy(string root)
+    {
+        if (!Directory.Exists(root)) return;
+        foreach (string dir in Directory.GetDirectories(root))
+        {
+            if (!System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileName(dir), @"^\d{8}-\d{6}-[0-9a-f]{32}$")) continue;
+            string file = Path.Combine(dir, "activities.json");
+            if (!File.Exists(file)) continue;
+            CheckTree(root, dir);
+            ActivityJournal? journal;
+            try { journal = JsonSerializer.Deserialize<ActivityJournal>(File.ReadAllText(file), ReplayJson.Options); }
+            catch (JsonException) { continue; }
+            if (journal == null || journal.SessionId != Path.GetFileName(dir) || string.IsNullOrEmpty(journal.Seed) || journal.SchemaVersion != 2 || string.IsNullOrEmpty(journal.CharacterId)) continue;
+            Directory.Delete(dir, true);
+        }
     }
     private static void CheckTree(string root, string target)
     {

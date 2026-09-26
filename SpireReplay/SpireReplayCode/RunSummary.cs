@@ -20,7 +20,7 @@ public static class RunSummary
             string id = S(detail, "potionId"), name = S(detail, "name");
             if (id.Length > 0 && name.Length > 0) potionNames[id] = name;
         }
-        foreach (var entry in room.Events)
+        foreach (var entry in CancelledSelectionFilter.Effective(room.Events))
         {
             var data = JsonSerializer.SerializeToElement(entry.Data);
             if (data.ValueKind != JsonValueKind.Object || !data.TryGetProperty("details", out var d) || d.ValueKind != JsonValueKind.Object) continue;

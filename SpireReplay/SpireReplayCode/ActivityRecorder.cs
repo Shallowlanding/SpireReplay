@@ -42,12 +42,12 @@ internal static partial class BattleRecorder
         ActiveEventChoices.Clear();
         PendingAttempts.Clear();
         EnsureRunArchive(run);
-        string directory = Path.Combine(ProjectSettings.GlobalizePath("user://SpireReplay/recordings"), _sessionId);
+        string directory = Path.Combine(ProjectSettings.GlobalizePath("user://SpireReplay/recordings"), "runs", ReplayJson.Hash(WholeRun!.Data.RunId), "sessions", _sessionId);
         _journal = new ActivityJournalFile(directory, new ActivityJournal
         {
             SessionId = _sessionId, Seed = run.Rng.StringSeed,
             CharacterId = run.Players[0].Character.Id.ToString()
-        });
+        }, persist: false);
     }
 
     private static bool CanRecord(Player player) => player.RunState.Players.Count == 1 &&
@@ -59,7 +59,8 @@ internal static partial class BattleRecorder
         if (!CanRecord(player)) return null;
         EnsureSession(player.RunState);
         var run = player.RunState;
-        var location = new RecordingLocation(run.CurrentActIndex + 1, run.TotalFloor, run.CurrentRoom?.Id);
+        var location = new RecordingLocation(run.CurrentActIndex + 1,
+            RecordingLocation.ArchiveFloor(run.TotalFloor, run.CurrentRoom?.ModelId?.ToString()), run.CurrentRoom?.Id);
         var token = new ActivityToken(player, Guid.NewGuid().ToString("N"),
             location.RoomId, location.TotalFloor,
             location.MatchesBattle(_lastBattleLocation) && ReferenceEquals(run.CurrentRoom, _lastBattleRoom)

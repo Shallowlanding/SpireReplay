@@ -6,7 +6,7 @@ public sealed class BattleRecording
     public string RunId { get; init; } = "";
     public int AttemptNumber { get; set; } = 1;
     public int SchemaVersion { get; init; } = 2;
-    public string ModVersion { get; init; } = "0.9.4";
+    public string ModVersion { get; init; } = "0.11.9";
     public string GameVersion { get; init; } = "";
     public string GameAssemblyId { get; init; } = "";
     public string SessionId { get; init; } = "";
@@ -52,7 +52,7 @@ public sealed record CardPlaySnapshot(CardSnapshot Card, TargetSnapshot? Target,
 public sealed class ActivityJournal
 {
     public int SchemaVersion { get; init; } = 2;
-    public string ModVersion { get; init; } = "0.9.4";
+    public string ModVersion { get; init; } = "0.11.9";
     public string SessionId { get; init; } = "";
     public string Seed { get; init; } = "";
     public string CharacterId { get; init; } = "";

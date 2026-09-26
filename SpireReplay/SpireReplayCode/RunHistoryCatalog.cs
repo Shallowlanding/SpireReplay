@@ -29,6 +29,8 @@ public static class RunHistoryCatalog
                     !string.Equals(run.Seed, current.Seed, StringComparison.OrdinalIgnoreCase) ||
                     !string.Equals(run.CharacterId, current.CharacterId, StringComparison.OrdinalIgnoreCase) ||
                     run.Rooms == null || run.Rooms.Count == 0 || run.Areas == null || result.Any(r => r.Recording.RunId == run.RunId)) continue;
+                CancelledSelectionFilter.Clean(run);
+                RecordingLocation.NormalizeArchitect(run);
                 result.Add(new RunHistoryEntry(run, run.StoredAtUtc ?? run.StartedAt ?? new DateTimeOffset(File.GetCreationTimeUtc(path))));
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or NotSupportedException)

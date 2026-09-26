@@ -136,6 +136,19 @@ internal static class ReplayDriver
             var state = BattleRecorder.CurrentCombat;
             if (state == null || BattleRecorder.CurrentRecording?.BattleId != _battleId)
             { Stop("战斗已切换"); return; }
+            if (CanSelectAutomatically && _timeline?.Next is { Type: "cards_selected" } openChoice && OpenHandSelection.IsOpen)
+            {
+                var selected = new List<CardModel>();
+                foreach (var expected in ReplayTimeline.Cards(openChoice))
+                {
+                    var matches = state.RunState.Players[0].PlayerCombatState!.Hand.Cards
+                        .Where(c => !selected.Contains(c) && ReplayTimeline.SameCard(expected, BattleRecorder.Card(c))).ToList();
+                    if (matches.Count != 1) { Stop("已打开的选牌界面与记录不匹配"); return; }
+                    selected.Add(matches[0]);
+                }
+                if (OpenHandSelection.Complete(selected)) _lastProgress = Environment.TickCount64;
+                return;
+            }
             if (_pending != null)
             {
                 if (!_pending.CompletionTask.IsCompleted) { CheckTimeout(); return; }
@@ -251,14 +264,15 @@ internal static class ReplayActionRecordPatch
 {
     private static void Prefix(GameAction __instance)
     {
-        if (__instance.State.ToString() == "WaitingForExecution") BattleRecorder.RecordReplayAction(__instance);
+        if (__instance.State.ToString() == "WaitingForExecution") { MultiplayerReplay.RecordAction(__instance); BattleRecorder.RecordReplayAction(__instance); }
+        else if (__instance.State.ToString() == "ReadyToResumeExecuting") MultiplayerReplay.RecordResume(__instance);
     }
 }
 
 [HarmonyPatch(typeof(ActionQueueSynchronizer), nameof(ActionQueueSynchronizer.RequestEnqueue))]
 internal static class ReplayQueuePatch
 {
-    private static void Prefix(GameAction action) => ReplayDriver.Queued(action);
+    private static void Prefix(GameAction action) { MultiplayerReplay.Queued(action); ReplayDriver.Queued(action); }
 }
 
 [HarmonyPatch(typeof(CardSelectCmd), "get_LocalSelector")]
@@ -266,7 +280,8 @@ internal static class ReplaySelectorPatch
 {
     private static void Postfix(ref ICardSelector? __result)
     {
-        if (ReplayDriver.CanSelectAutomatically && __result == null) __result = ReplayDriver.Selector;
+        if (MultiplayerReplay.Active && __result == null) __result = MultiplayerReplay.Selector;
+        else if (ReplayDriver.CanSelectAutomatically && __result == null) __result = ReplayDriver.Selector;
         else if (RunReplayDriver.Active && __result == null) __result = RunReplayDriver.Selector;
     }
 }

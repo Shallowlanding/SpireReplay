@@ -12,13 +12,14 @@ public static class ReplayCode
     { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
     public static string Export(RunRecording run)
     {
+        RecordingLocation.NormalizeArchitect(run);
         Validate(run);
-        byte[] json = JsonSerializer.SerializeToUtf8Bytes(run, Compact);
+        byte[] json = PortableRun.Encode(run, Compact);
         if (json.Length > MaxJsonBytes) throw new InvalidDataException("记录过大，无法生成复盘码");
         using var output = new MemoryStream();
         using (var zip = new BrotliStream(output, CompressionLevel.SmallestSize, true)) zip.Write(json);
         byte[] data = output.ToArray();
-        string code = "SPR1." + Convert.ToBase64String(data).TrimEnd('=').Replace('+', '-').Replace('/', '_') + "." + Convert.ToHexString(SHA256.HashData(data));
+        string code = "SPR2." + Convert.ToBase64String(data).TrimEnd('=').Replace('+', '-').Replace('/', '_') + "." + Convert.ToHexString(SHA256.HashData(data));
         if (code.Length > MaxCodeChars) throw new InvalidDataException("复盘码过长");
         return code;
     }
@@ -27,7 +28,7 @@ public static class ReplayCode
         if (string.IsNullOrWhiteSpace(code) || code.Length > MaxCodeChars) throw new InvalidDataException("复盘码为空或过长");
         code = string.Concat(code.Where(c => !char.IsWhiteSpace(c)));
         var parts = code.Split('.');
-        if (parts.Length != 3 || parts[0] != "SPR1") throw new InvalidDataException("复盘码格式或版本不支持（应以 SPR1. 开头）");
+        if (parts.Length != 3 || parts[0] is not ("SPR1" or "SPR2")) throw new InvalidDataException("复盘码格式或版本不支持（支持 SPR1 / SPR2）");
         try
         {
             string payload = parts[1].Replace('-', '+').Replace('_', '/');
@@ -44,8 +45,17 @@ public static class ReplayCode
                 if (json.Length + count > MaxJsonBytes) throw new InvalidDataException("复盘码解压后的记录过大");
                 json.Write(buffer, 0, count);
             }
-            var run = JsonSerializer.Deserialize<RunRecording>(json.ToArray(), Compact) ?? throw new InvalidDataException("复盘码没有对局数据");
+            byte[] decoded = json.ToArray();
+            if (parts[0] == "SPR2")
+            {
+                var portable = System.Text.Json.Nodes.JsonNode.Parse(decoded) as System.Text.Json.Nodes.JsonObject ?? throw new InvalidDataException("复盘记录格式无效");
+                PortableRun.Restore(portable);
+                decoded = JsonSerializer.SerializeToUtf8Bytes(portable, Compact);
+            }
+            var run = JsonSerializer.Deserialize<RunRecording>(decoded, Compact) ?? throw new InvalidDataException("复盘码没有对局数据");
             Validate(run);
+            CancelledSelectionFilter.Clean(run);
+            RecordingLocation.NormalizeArchitect(run);
             return run;
         }
         catch (Exception e) when (e is FormatException or JsonException or ArgumentException)

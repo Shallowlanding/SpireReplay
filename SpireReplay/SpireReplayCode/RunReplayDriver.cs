@@ -51,10 +51,12 @@ internal static class RunReplayDriver
         var current = BattleRecorder.WholeRun?.Data;
         if (source == null || current == null)
         { Status = "请先进入对局并选择历史版本"; return; }
+        CancelledSelectionFilter.Clean(source);
+        RecordingLocation.NormalizeArchitect(source);
         if (Mismatch(source, current) is { } reason) { Status = reason; return; }
         var state = RunManager.Instance.DebugOnlyGetState();
         if (target != null && (!source.Rooms.Any(r => r.Act == target.Act && r.Floor == target.Floor) ||
-            state != null && target.IsPast(state.CurrentActIndex + 1, state.TotalFloor)))
+            state != null && target.IsPast(state.CurrentActIndex + 1, RecordingLocation.ArchiveFloor(state.TotalFloor, state.CurrentRoom?.ModelId?.ToString()))))
         { Status = "目标小层不存在或已经经过，请重新选择或 SL"; return; }
         _target = target;
         _source = source; _runId = current.RunId; _room = null; _startedBattle = null;
@@ -115,7 +117,8 @@ internal static class RunReplayDriver
             { Stop("游戏已暂停，整局重打停止"); return; }
             var room = run.CurrentRoom;
             if (room == null) { Wait(); return; }
-            var recorded = _source!.Rooms.FirstOrDefault(r => r.Act == run.CurrentActIndex + 1 && r.Floor == run.TotalFloor && r.RoomId == room.Id);
+            int archiveFloor = RecordingLocation.ArchiveFloor(run.TotalFloor, room.ModelId?.ToString());
+            var recorded = _source!.Rooms.FirstOrDefault(r => r.Act == run.CurrentActIndex + 1 && r.Floor == archiveFloor && r.RoomId == room.Id);
             if (recorded != null && _room != recorded)
             {
                 if (recorded.Type != room.RoomType.ToString() || recorded.ModelId != (room.ModelId?.ToString() ?? ""))
@@ -126,7 +129,7 @@ internal static class RunReplayDriver
                 if (_cursor < 0) { Stop("本房间已进行的操作与记录不同，请重开或 SL"); return; }
                 _pending = null; _rewardPending = null; _awaitingInput = false; _startedBattle = null; _progress = Environment.TickCount64;
             }
-            Status = $"整局重打 · 第 {run.TotalFloor} 层 · {RunSummary.RoomName(room.RoomType.ToString())}";
+            Status = $"整局重打 · 第 {archiveFloor} 层 · {RunSummary.RoomName(room.RoomType.ToString())}";
             if (BattleRecorder.CurrentRecording is { } battle)
             {
                 if (recorded?.Battle == null) { Stop("历史记录没有这场战斗的完整操作"); return; }
@@ -158,6 +161,14 @@ internal static class RunReplayDriver
                 if (!_pending.IsCompleted)
                 {
                     if (!_awaitingInput && Next?.Type == "reward_selection_started") Dispatch(Next);
+                    else if (CanCloseNestedRewards(_awaitingInput, Next) && NOverlayStack.Instance?.Peek() is NRewardsScreen nestedRewards)
+                    {
+                        // OfferCustom completes only after this page is closed, including when
+                        // an explicitly skipped card reward remains in the reward list.
+                        if (Click(Field<NProceedButton>(nestedRewards, "_proceedButton")))
+                            _nextTick = Environment.TickCount64 + 1000;
+                        else Wait();
+                    }
                     else Wait();
                     return;
                 }
@@ -166,14 +177,14 @@ internal static class RunReplayDriver
                 _pending = null; _progress = Environment.TickCount64;
             }
             if (_awaitingInput) { Wait(); return; }
-            if (_target != null && _target.IsComplete(_source!, BattleRecorder.WholeRun!.Data, run.CurrentActIndex + 1, run.TotalFloor))
+            if (_target != null && _target.IsComplete(_source!, BattleRecorder.WholeRun!.Data, run.CurrentActIndex + 1, archiveFloor))
             { Stop($"已完成第 {_target.Floor} 层全部已记录操作，交还手动操作"); return; }
-            if (_target?.IsPast(run.CurrentActIndex + 1, run.TotalFloor) == true)
+            if (_target?.IsPast(run.CurrentActIndex + 1, archiveFloor) == true)
             { Stop("已到达所选小层之后，重打已停止"); return; }
             if (NMapScreen.Instance is { IsOpen: true, IsTravelEnabled: true, IsTraveling: false } map)
             {
                 if (Next != null) { map.Close(); Wait(); }
-                else Travel(map, run.CurrentActIndex + 1, run.TotalFloor);
+                else Travel(map, run.CurrentActIndex + 1, archiveFloor);
                 return;
             }
             if (recorded == null) { Stop("已到达历史记录未覆盖的房间"); return; }
@@ -191,6 +202,8 @@ internal static class RunReplayDriver
         }
         catch (Exception e) { MainFile.Logger.Warn(e.ToString()); Stop("整局重打异常，已停止：" + e.GetBaseException().Message); }
     }
+    internal static bool CanCloseNestedRewards(bool awaitingInput, RecordedEvent? next) =>
+        !awaitingInput && (next == null || next.Type == "event_option_started");
     private static void Travel(NMapScreen map, int act, int floor)
     {
         if (_target != null && (act == _target.Act && floor == _target.Floor || _target.IsPast(act, floor)))

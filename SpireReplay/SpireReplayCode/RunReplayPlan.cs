@@ -61,7 +61,7 @@ public static class RunReplayPlan
     public static int MatchingPrefix(IReadOnlyList<RecordedEvent> source, IEnumerable<RecordedEvent> actual)
     {
         int count = 0;
-        var entries = actual.ToList();
+        var entries = CancelledSelectionFilter.Effective(actual);
         if (entries.Any(Failed)) return -1;
         foreach (var entry in entries.Where(IsInput))
         {

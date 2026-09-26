@@ -107,6 +107,7 @@ internal static partial class BattleRecorder
             var options = synchronizer.GetOptionsForPlayer(player);
             if (optionIndex < 0 || optionIndex >= options.Count) return;
             var option = options[optionIndex];
+            BeginAttempt(player);
             var token = Begin(player, "rest_option_started", new
             {
                 optionIndex, optionId = option.OptionId, name = option.Title.GetFormattedText(),
@@ -128,6 +129,7 @@ internal static partial class BattleRecorder
             completed, success = completed && success, hpAfter = player.Creature.CurrentHp,
             maxHpAfter = player.Creature.MaxHp, hpDelta = player.Creature.CurrentHp - capture.HpBefore
         });
+        FlushAttempt(player, false);
     });
 
     public static UpgradeCapture? UpgradeStarted(CardModel card)

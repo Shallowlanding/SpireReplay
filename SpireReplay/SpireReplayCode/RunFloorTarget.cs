@@ -12,13 +12,15 @@ public sealed record RunFloorTarget(int Act, int Floor)
         {
             var actual = current.Rooms.FirstOrDefault(r => r.Act == Act && r.Floor == Floor && r.RoomId == expected.RoomId);
             if (actual == null) return false;
-            var inputs = expected.Events.Where(RunReplayPlan.IsInput).ToList();
+            var expectedEvents = CancelledSelectionFilter.Effective(expected.Events);
+            var actualEvents = CancelledSelectionFilter.Effective(actual.Events);
+            var inputs = expectedEvents.Where(RunReplayPlan.IsInput).ToList();
             if (RunReplayPlan.MatchingPrefix(inputs, actual.Events) != inputs.Count) return false;
             if (expected.Battle != null && (actual.Battle == null || actual.Battle.Status != expected.Battle.Status)) return false;
             if (expected.Battle == null && expected.Type is "Monster" or "Elite" or "Boss") return false;
             // Starts are recorded before async effects settle. Do not stop merely because the last input was sent.
-            foreach (var group in expected.Events.Where(e => e.Type.EndsWith("_finished") && e.Type != "card_play_finished").GroupBy(e => e.Type))
-                if (actual.Events.Count(e => e.Type == group.Key) < group.Count()) return false;
+            foreach (var group in expectedEvents.Where(e => e.Type.EndsWith("_finished") && e.Type != "card_play_finished").GroupBy(e => e.Type))
+                if (actualEvents.Count(e => e.Type == group.Key) < group.Count()) return false;
         }
         return true;
     }

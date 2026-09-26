@@ -11,7 +11,7 @@ public partial class ReplayLibraryPanel : Control
 {
     public static bool IsOpen { get; private set; }
     private static string Root => ProjectSettings.GlobalizePath("user://SpireReplay/recordings");
-    private static string? ActiveId => RunManager.Instance.IsInProgress && !RunManager.Instance.IsCleaningUp ? BattleRecorder.WholeRun?.Data.RunId : null;
+    private static string? ActiveId => RunManager.Instance.IsInProgress && !RunManager.Instance.IsCleaningUp && RunManager.Instance.NetService.Type == MegaCrit.Sts2.Core.Multiplayer.Game.NetGameType.Singleplayer ? BattleRecorder.WholeRun?.Data.RunId : null;
     private readonly Color _cyan = new(0.36f, 0.65f, 0.76f);
     private VBoxContainer _list = null!;
     private TextEdit _code = null!;
@@ -23,7 +23,8 @@ public partial class ReplayLibraryPanel : Control
     private Label _count = null!;
     private Button _export = null!, _delete = null!, _clear = null!, _copySeed = null!;
     private string? _selected;
-    private string? _confirmation;
+    private ConfirmationDialog _deleteDialog = null!;
+    private Action? _confirmedDelete;
     private List<StoredRun> _entries = [];
 
     public override void _Ready()
@@ -67,6 +68,11 @@ public partial class ReplayLibraryPanel : Control
         // Scale the logical layout to fit small windows without clipping controls.
         void Fit() { var size = GetViewportRect().Size; float scale = Math.Min(1f, Math.Min(size.X / 930f, size.Y / 710f)); center.Scale = Vector2.One * scale; center.Size = size / scale; dialogCenter.Scale = Vector2.One * scale; dialogCenter.Size = size / scale; }
         Resized += Fit; Fit();
+        _deleteDialog = new ConfirmationDialog { Title = "确认删除", OkButtonText = "删除", CancelButtonText = "返回", Exclusive = true, Transient = true };
+        AddChild(_deleteDialog);
+        ReplayPanel.ApplyFonts(_deleteDialog);
+        _deleteDialog.Confirmed += () => Guard(() => { var action = _confirmedDelete; _confirmedDelete = null; action?.Invoke(); });
+        _deleteDialog.Canceled += () => _confirmedDelete = null;
         Hide();
     }
     private Button AddButton(Node parent, string text, Action action)
@@ -76,11 +82,12 @@ public partial class ReplayLibraryPanel : Control
     }
     public void Open()
     {
+        MultiplayerReplay.Stop("打开复盘管理，已停止重打");
         RunReplayDriver.Stop("打开复盘管理，已停止重打"); ReplayDriver.Stop("打开复盘管理，已停止重打");
         IsOpen = true; Show(); _code.Text = ""; _status.Text = ""; _dialog.Hide();
         Guard(Refresh);
     }
-    public void Close() { IsOpen = false; Hide(); _dialog.Hide(); _confirmation = null; }
+    public void Close() { IsOpen = false; Hide(); _dialog.Hide(); _deleteDialog.Hide(); _confirmedDelete = null; }
     public override void _ExitTree() { if (Visible) IsOpen = false; }
     private void Guard(Action action)
     {
@@ -89,7 +96,7 @@ public partial class ReplayLibraryPanel : Control
     }
     private void Refresh()
     {
-        _entries = RunLibrary.List(Root); _confirmation = null;
+        _entries = RunLibrary.List(Root); _confirmedDelete = null;
         if (!_entries.Any(e => e.Recording.RunId == _selected)) _selected = null;
         foreach (Node child in _list.GetChildren()) { _list.RemoveChild(child); child.QueueFree(); }
         _count.Text = $"本地记录{_entries.Count}/{RunLibrary.Capacity}，超过上限自动按顺序清理";
@@ -140,15 +147,19 @@ public partial class ReplayLibraryPanel : Control
     }
     private void Delete()
     {
-        if (_selected == null) return;
-        if (_confirmation != _selected) { _confirmation = _selected; _delete.Text = "确认删除此对局"; _status.Text = "删除会移除该对局及其战斗记录。需要保留时请先导出；再次点击确认。"; return; }
-        RunLibrary.Delete(Root, _selected, ActiveId); _selected = null; Refresh(); _status.Text = "已删除选中的对局。";
+        string? selected = _selected;
+        if (selected == null) return;
+        _deleteDialog.DialogText = "删除选中的对局及其本地战斗记录？";
+        _confirmedDelete = () => { RunLibrary.Delete(Root, selected, ActiveId); _selected = null; Refresh(); _status.Text = "已删除本地记录"; };
+        _deleteDialog.PopupCentered(new Vector2I(480, 180));
     }
     private void Clear()
     {
-        if (_confirmation != "clear") { _confirmation = "clear"; _clear.Text = "确认清空历史"; _status.Text = "将清空全部历史（正在录制的当前局保留）。需要保留时请先导出；再次点击确认。"; return; }
-        int count = RunLibrary.Clear(Root, ActiveId); Refresh(); _status.Text = $"已清理 {count} 条历史记录。";
+        _deleteDialog.DialogText = "清空全部本地历史？正在录制的当前局会保留。";
+        _confirmedDelete = () => { int count = RunLibrary.Clear(Root, ActiveId); Refresh(); _status.Text = $"已清理 {count} 条历史记录"; };
+        _deleteDialog.PopupCentered(new Vector2I(480, 180));
     }
+
 }
 
 [HarmonyPatch(typeof(NSettingsScreen), nameof(NSettingsScreen._Ready))]

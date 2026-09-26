@@ -6,7 +6,8 @@ public sealed record RunArea(int Act, string Id, string Name);
 public sealed class RunRoomRecord
 {
     public int Act { get; init; }
-    public int Floor { get; init; }
+    public int Floor { get; set; }
+    public int? GameFloor { get; set; }
     public int RoomId { get; init; }
     public string Type { get; init; } = "";
     public string ModelId { get; init; } = "";
@@ -49,6 +50,8 @@ public sealed class RunArchive
         Data = File.Exists(FilePath) ? JsonSerializer.Deserialize<RunRecording>(File.ReadAllText(FilePath), ReplayJson.Options)
             ?? throw new InvalidDataException("整局记录无效") : initial;
         if (Data.RunId != initial.RunId) throw new InvalidDataException("整局身份不匹配");
+        CancelledSelectionFilter.Clean(Data);
+        RecordingLocation.NormalizeArchitect(Data);
         Data.StoredAtUtc ??= File.Exists(FilePath) ? new DateTimeOffset(File.GetCreationTimeUtc(FilePath)) : DateTimeOffset.UtcNow;
         Data.Areas = initial.Areas;
         Data.ModifierIds = initial.ModifierIds;

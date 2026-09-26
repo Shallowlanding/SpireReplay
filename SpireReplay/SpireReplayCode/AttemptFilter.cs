@@ -37,6 +37,8 @@ internal static partial class BattleRecorder
             "reward_selection_finished", "potion_obtain_started", "potion_obtain_finished"
         };
         if (omit && pending.Entries.All(x => harmlessTypes.Contains(x.Entry.Type))) return;
-        foreach (var (token, entry) in pending.Entries) WriteActivity(token, entry);
+        var effective = CancelledSelectionFilter.Effective(pending.Entries.Select(x => x.Entry)).ToHashSet();
+        foreach (var (token, entry) in pending.Entries)
+            if (effective.Contains(entry)) WriteActivity(token, entry);
     }
 }

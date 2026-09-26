@@ -60,21 +60,23 @@ public sealed class RecordingFile
 
 public sealed class ActivityJournalFile
 {
+    private readonly bool _persist;
     public string FilePath { get; }
     public ActivityJournal Journal { get; }
 
-    public ActivityJournalFile(string directory, ActivityJournal journal)
+    public ActivityJournalFile(string directory, ActivityJournal journal, bool persist = true)
     {
-        Directory.CreateDirectory(directory);
+        _persist = persist;
+        if (_persist) Directory.CreateDirectory(directory);
         FilePath = Path.Combine(directory, "activities.json");
         Journal = journal;
-        RecordingFile.WriteAtomic(FilePath, Journal);
+        if (_persist) RecordingFile.WriteAtomic(FilePath, Journal);
     }
 
     public void Append(RecordedEvent entry)
     {
         entry.Sequence = Journal.Events.Count + 1;
         Journal.Events.Add(entry);
-        RecordingFile.WriteAtomic(FilePath, Journal);
+        if (_persist) RecordingFile.WriteAtomic(FilePath, Journal);
     }
 }
